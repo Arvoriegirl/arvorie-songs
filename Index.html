@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Arvorie's Song List 🎵</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background: #fff0f5;
+      color: #333;
+      margin: 20px;
+    }
+    h1 {
+      font-size: 3em;
+      color: #8b0000;
+      text-align: center;
+    }
+    h1::before, h1::after {
+      content: "🎵";
+      margin: 0 10px;
+    }
+    form, #searchDiv {
+      margin-bottom: 20px;
+      background: #ffe4e1;
+      padding: 15px;
+      border-radius: 12px;
+    }
+    input, button {
+      font-size: 1em;
+      padding: 8px;
+      margin: 5px 5px 5px 0;
+    }
+    button {
+      background: #8b0000;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+    button:hover {
+      background: #b22222;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 1.2em;
+    }
+    th, td {
+      border: 1px solid #8b0000;
+      padding: 10px;
+      text-align: center;
+    }
+    th {
+      background: #fa8072;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Arvorie's Song List</h1>
+
+<!-- Search Filter -->
+<div id="searchDiv">
+  <input type="text" id="searchSong" placeholder="Search by Song Name">
+  <input type="text" id="searchArtist" placeholder="Search by Artist">
+  <button id="searchBtn">Search</button>
+  <button id="resetBtn">Reset</button>
+</div>
+
+<!-- Login Form for Admin -->
+<div id="loginDiv">
+  <h2>Admin Login</h2>
+  <input type="email" id="email" placeholder="Email"><br>
+  <input type="password" id="password" placeholder="Password"><br>
+  <button id="loginBtn">Login</button>
+</div>
+
+<!-- Music Form (admin only) -->
+<form id="musicForm" style="display:none;">
+  <input type="text" id="song_name" placeholder="Song Name" required><br>
+  <input type="text" id="artist" placeholder="Artist"><br>
+  <input type="text" id="genre" placeholder="Genre"><br>
+  <input type="text" id="language" placeholder="Language"><br>
+  <input type="text" id="style" placeholder="Acoustic / Track"><br>
+  <input type="date" id="last_performed"><br>
+  <button type="submit">Add Song</button>
+</form>
+
+<h3>Song List</h3>
+<table id="musicTable">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Artist</th>
+      <th>Genre</th>
+      <th>Language</th>
+      <th>Style</th>
+      <th>Date</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+const SUPABASE_URL = "https://qkabaxdfqkpanwvagpdn.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFrYWJheGRmcWtwYW53dmFncGRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1MTY0ODgsImV4cCI6MjA5MDA5MjQ4OH0.M4nwV2OgHXf9fUpifjua1NPBGsA2Y0OYEKiz6ie_2R0";
+
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let user = null;
+
+// LOGIN
+document.getElementById("loginBtn").addEventListener("click", async () => {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) { alert(error.message); return; }
+  user = data.user;
+  alert("Logged in as admin!");
+  document.getElementById("loginDiv").style.display = "none";
+  document.getElementById("musicForm").style.display = "block";
+  loadData();
+});
+
+// LOAD DATA with optional filters
+async function loadData(songFilter = "", artistFilter = "") {
+  let query = supabase.from("Songs").select("*").order('song_name');
+
+  if (songFilter) query = query.ilike("song_name", `%${songFilter}%`);
+  if (artistFilter) query = query.ilike("artist", `%${artistFilter}%`);
+
+  const { data, error } = await query;
+  if (error) { console.error(error); return; }
+
+  const tbody = document.querySelector("#musicTable tbody");
+  tbody.innerHTML = "";
+  data.forEach(row => {
+    let actions = "";
+    if (user) {
+      actions = `<button onclick="deleteSong(${row.id})">Delete</button>
+                 <button onclick="editSong(${row.id})">Edit</button>`;
+    }
+    tbody.innerHTML += `<tr>
+      <td>${row.song_name}</td>
+      <td>${row.artist}</td>
+      <td>${row.genre}</td>
+      <td>${row.language}</td>
+      <td>${row.style}</td>
+      <td>${row.last_performed || ""}</td>
+      <td>${actions}</td>
+    </tr>`;
+  });
+}
+
+// ADD SONG
+document.getElementById("musicForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!user) return alert("Login first!");
+  const { error } = await supabase.from("Songs").insert([{
+    song_name: document.getElementById("song_name").value,
+    artist: document.getElementById("artist").value,
+    genre: document.getElementById("genre").value,
+    language: document.getElementById("language").value,
+    style: document.getElementById("style").value,
+    last_performed: document.getElementById("last_performed").value
+  }]);
+  if (error) { console.error(error); alert("Error adding song"); return; }
+  document.getElementById("musicForm").reset();
+  loadData();
+});
+
+// DELETE SONG
+async function deleteSong(id) {
+  const { error } = await supabase.from("Songs").delete().eq("id", id);
+  if (error) { console.error(error); alert("Error deleting"); return; }
+  loadData();
+}
+
+// EDIT SONG
+async function editSong(id) {
+  const newName = prompt("Enter new song name:");
+  if (!newName) return;
+  const { error } = await supabase.from("Songs").update({ song_name: newName }).eq("id", id);
+  if (error) { console.error(error); alert("Error updating"); return; }
+  loadData();
+}
+
+// SEARCH BUTTON
+document.getElementById("searchBtn").addEventListener("click", () => {
+  const song = document.getElementById("searchSong").value;
+  const artist = document.getElementById("searchArtist").value;
+  loadData(song, artist);
+});
+
+// RESET BUTTON
+document.getElementById("resetBtn").addEventListener("click", () => {
+  document.getElementById("searchSong").value = "";
+  document.getElementById("searchArtist").value = "";
+  loadData();
+});
+
+// INITIAL LOAD
+loadData();
+</script>
+
+</body>
+</html>
