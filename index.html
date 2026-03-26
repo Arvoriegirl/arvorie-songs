@@ -19,7 +19,7 @@
       content: "🎵";
       margin: 0 10px;
     }
-    form, #searchDiv {
+    form, #searchDiv, #loginDiv {
       margin-bottom: 20px;
       background: #ffe4e1;
       padding: 15px;
@@ -53,29 +53,63 @@
     th {
       background: #fa8072;
     }
+    tr.admin-hover:hover {
+      background-color: #ffcccc;
+      cursor: pointer;
+    }
+    .filter-input {
+      width: 150px;
+    }
+    /* Modal */
+    .modal {
+      display: none; 
+      position: fixed; 
+      z-index: 1000; 
+      left: 0;
+      top: 0;
+      width: 100%; 
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.5);
+    }
+    .modal-content {
+      background-color: #ffe4e1;
+      margin: 10% auto;
+      padding: 20px;
+      border: 1px solid #888;
+      width: 400px;
+      border-radius: 12px;
+    }
+    .modal-content input {
+      width: 100%;
+    }
   </style>
 </head>
 <body>
 
 <h1>Arvorie's Song List</h1>
 
-<!-- Search Filter -->
+<!-- SEARCH FILTERS -->
 <div id="searchDiv">
-  <input type="text" id="searchSong" placeholder="Search by Song Name">
-  <input type="text" id="searchArtist" placeholder="Search by Artist">
+  <input type="text" id="filterSong" class="filter-input" placeholder="Song Name">
+  <input type="text" id="filterArtist" class="filter-input" placeholder="Artist">
+  <input type="text" id="filterGenre" class="filter-input" placeholder="Genre">
+  <input type="text" id="filterLanguage" class="filter-input" placeholder="Language">
+  <input type="text" id="filterStyle" class="filter-input" placeholder="Style">
   <button id="searchBtn">Search</button>
   <button id="resetBtn">Reset</button>
 </div>
 
-<!-- Login Form for Admin -->
+<!-- ADMIN LOGIN -->
 <div id="loginDiv">
   <h2>Admin Login</h2>
   <input type="email" id="email" placeholder="Email"><br>
   <input type="password" id="password" placeholder="Password"><br>
   <button id="loginBtn">Login</button>
+  <p id="loginMsg" style="color:red;"></p>
 </div>
 
-<!-- Music Form (admin only) -->
+<!-- ADMIN MUSIC FORM -->
 <form id="musicForm" style="display:none;">
   <input type="text" id="song_name" placeholder="Song Name" required><br>
   <input type="text" id="artist" placeholder="Artist"><br>
@@ -96,68 +130,96 @@
       <th>Language</th>
       <th>Style</th>
       <th>Date</th>
-      <th>Actions</th>
     </tr>
   </thead>
   <tbody></tbody>
 </table>
+
+<!-- MODAL FOR EDIT -->
+<div id="editModal" class="modal">
+  <div class="modal-content">
+    <h3>Edit Song</h3>
+    <input type="text" id="editSongName" placeholder="Song Name"><br>
+    <input type="text" id="editArtist" placeholder="Artist"><br>
+    <input type="text" id="editGenre" placeholder="Genre"><br>
+    <input type="text" id="editLanguage" placeholder="Language"><br>
+    <input type="text" id="editStyle" placeholder="Style"><br>
+    <input type="date" id="editLastPerformed"><br><br>
+    <button id="saveEditBtn">Save Changes</button>
+    <button id="cancelEditBtn">Cancel</button>
+  </div>
+</div>
 
 <script>
 const SUPABASE_URL = "https://qkabaxdfqkpanwvagpdn.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFrYWJheGRmcWtwYW53dmFncGRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1MTY0ODgsImV4cCI6MjA5MDA5MjQ4OH0.M4nwV2OgHXf9fUpifjua1NPBGsA2Y0OYEKiz6ie_2R0";
 
 const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
 let user = null;
+let editId = null;
 
-// LOGIN
+// ADMIN LOGIN
 document.getElementById("loginBtn").addEventListener("click", async () => {
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
+  const loginMsg = document.getElementById("loginMsg");
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) { alert(error.message); return; }
+  if (error) { loginMsg.textContent = "Login failed: " + error.message; return; }
+  if (!data.user) { loginMsg.textContent = "Login failed: check email/password"; return; }
+
   user = data.user;
+  loginMsg.textContent = "";
   alert("Logged in as admin!");
   document.getElementById("loginDiv").style.display = "none";
   document.getElementById("musicForm").style.display = "block";
   loadData();
 });
 
-// LOAD DATA with optional filters
-async function loadData(songFilter = "", artistFilter = "") {
+// LOAD DATA
+async function loadData(song="", artist="", genre="", language="", style="") {
   let query = supabase.from("Songs").select("*").order('song_name');
-
-  if (songFilter) query = query.ilike("song_name", `%${songFilter}%`);
-  if (artistFilter) query = query.ilike("artist", `%${artistFilter}%`);
+  if(song) query = query.ilike("song_name", `%${song}%`);
+  if(artist) query = query.ilike("artist", `%${artist}%`);
+  if(genre) query = query.ilike("genre", `%${genre}%`);
+  if(language) query = query.ilike("language", `%${language}%`);
+  if(style) query = query.ilike("style", `%${style}%`);
 
   const { data, error } = await query;
-  if (error) { console.error(error); return; }
+  if(error){ console.error(error); return; }
 
   const tbody = document.querySelector("#musicTable tbody");
   tbody.innerHTML = "";
+
   data.forEach(row => {
-    let actions = "";
-    if (user) {
-      actions = `<button onclick="deleteSong(${row.id})">Delete</button>
-                 <button onclick="editSong(${row.id})">Edit</button>`;
+    let tr = document.createElement("tr");
+    if(user){ 
+      tr.classList.add("admin-hover"); 
+      tr.title = "Click to edit, right-click to delete";
+      tr.addEventListener("click", () => openEditModal(row));
+      tr.addEventListener("contextmenu", (e)=>{
+        e.preventDefault();
+        deleteSong(row.id);
+      });
     }
-    tbody.innerHTML += `<tr>
+
+    tr.innerHTML = `
       <td>${row.song_name}</td>
       <td>${row.artist}</td>
       <td>${row.genre}</td>
       <td>${row.language}</td>
       <td>${row.style}</td>
       <td>${row.last_performed || ""}</td>
-      <td>${actions}</td>
-    </tr>`;
+    `;
+    tbody.appendChild(tr);
   });
 }
 
 // ADD SONG
-document.getElementById("musicForm").addEventListener("submit", async (e) => {
+document.getElementById("musicForm").addEventListener("submit", async e => {
   e.preventDefault();
-  if (!user) return alert("Login first!");
+  if(!user) return alert("Login first!");
+  
   const { error } = await supabase.from("Songs").insert([{
     song_name: document.getElementById("song_name").value,
     artist: document.getElementById("artist").value,
@@ -166,38 +228,75 @@ document.getElementById("musicForm").addEventListener("submit", async (e) => {
     style: document.getElementById("style").value,
     last_performed: document.getElementById("last_performed").value
   }]);
-  if (error) { console.error(error); alert("Error adding song"); return; }
+
+  if(error){ console.error(error); alert("Error adding song"); return; }
+
   document.getElementById("musicForm").reset();
   loadData();
 });
 
-// DELETE SONG
-async function deleteSong(id) {
-  const { error } = await supabase.from("Songs").delete().eq("id", id);
-  if (error) { console.error(error); alert("Error deleting"); return; }
-  loadData();
+// OPEN EDIT MODAL
+function openEditModal(row) {
+  editId = row.id;
+  document.getElementById("editSongName").value = row.song_name;
+  document.getElementById("editArtist").value = row.artist;
+  document.getElementById("editGenre").value = row.genre;
+  document.getElementById("editLanguage").value = row.language;
+  document.getElementById("editStyle").value = row.style;
+  document.getElementById("editLastPerformed").value = row.last_performed || "";
+  document.getElementById("editModal").style.display = "block";
 }
 
-// EDIT SONG
-async function editSong(id) {
-  const newName = prompt("Enter new song name:");
-  if (!newName) return;
-  const { error } = await supabase.from("Songs").update({ song_name: newName }).eq("id", id);
-  if (error) { console.error(error); alert("Error updating"); return; }
+// SAVE EDIT
+document.getElementById("saveEditBtn").addEventListener("click", async ()=>{
+  if(!editId) return;
+  const { error } = await supabase.from("Songs").update({
+    song_name: document.getElementById("editSongName").value,
+    artist: document.getElementById("editArtist").value,
+    genre: document.getElementById("editGenre").value,
+    language: document.getElementById("editLanguage").value,
+    style: document.getElementById("editStyle").value,
+    last_performed: document.getElementById("editLastPerformed").value
+  }).eq("id", editId);
+
+  if(error){ console.error(error); alert("Error updating song"); return; }
+  document.getElementById("editModal").style.display = "none";
+  editId = null;
+  loadData();
+});
+
+// CANCEL EDIT
+document.getElementById("cancelEditBtn").addEventListener("click", ()=>{
+  document.getElementById("editModal").style.display = "none";
+  editId = null;
+});
+
+// DELETE SONG (right-click)
+async function deleteSong(id) {
+  if(!confirm("Are you sure you want to delete this song?")) return;
+  const { error } = await supabase.from("Songs").delete().eq("id", id);
+  if(error){ console.error(error); alert("Error deleting"); return; }
   loadData();
 }
 
 // SEARCH BUTTON
-document.getElementById("searchBtn").addEventListener("click", () => {
-  const song = document.getElementById("searchSong").value;
-  const artist = document.getElementById("searchArtist").value;
-  loadData(song, artist);
+document.getElementById("searchBtn").addEventListener("click", ()=>{
+  loadData(
+    document.getElementById("filterSong").value,
+    document.getElementById("filterArtist").value,
+    document.getElementById("filterGenre").value,
+    document.getElementById("filterLanguage").value,
+    document.getElementById("filterStyle").value
+  );
 });
 
 // RESET BUTTON
-document.getElementById("resetBtn").addEventListener("click", () => {
-  document.getElementById("searchSong").value = "";
-  document.getElementById("searchArtist").value = "";
+document.getElementById("resetBtn").addEventListener("click", ()=>{
+  document.getElementById("filterSong").value = "";
+  document.getElementById("filterArtist").value = "";
+  document.getElementById("filterGenre").value = "";
+  document.getElementById("filterLanguage").value = "";
+  document.getElementById("filterStyle").value = "";
   loadData();
 });
 
