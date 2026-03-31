@@ -2,73 +2,37 @@
 <html>
 <head>
   <title>Arvorie's Song List 🎵</title>
+
+  <!-- Supabase (ONLY ONCE) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
   <style>
-    body {
-      font-family: Arial;
-      background: #fff0f5;
-      margin: 20px;
-    }
-    h1 {
-      font-size: 3em;
-      text-align: center;
-      color: #8b0000;
-    }
-    h1::before, h1::after {
-      content: "🎵";
-      margin: 0 10px;
-    }
+    body { font-family: Arial; background:#fff0f5; margin:20px; }
+    h1 { text-align:center; color:#8b0000; font-size:3em; }
+    h1::before, h1::after { content:"🎵"; margin:0 10px; }
+
     form, #searchDiv, #loginDiv {
-      background: #ffe4e1;
-      padding: 15px;
-      border-radius: 12px;
-      margin-bottom: 20px;
+      background:#ffe4e1; padding:15px; border-radius:12px; margin-bottom:20px;
     }
-    input, button {
-      padding: 8px;
-      margin: 5px;
-    }
-    button {
-      background: #8b0000;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 1.2em;
-    }
-    th, td {
-      border: 1px solid #8b0000;
-      padding: 10px;
-      text-align: center;
-    }
-    th {
-      background: #fa8072;
-    }
-    tr.admin-hover:hover {
-      background: #ffcccc;
-      cursor: pointer;
-    }
+
+    input, button { padding:8px; margin:5px; }
+    button { background:#8b0000; color:white; border:none; border-radius:6px; cursor:pointer; }
+
+    table { width:100%; border-collapse:collapse; font-size:1.2em; }
+    th, td { border:1px solid #8b0000; padding:10px; text-align:center; }
+    th { background:#fa8072; }
+
+    tr.admin-hover:hover { background:#ffcccc; cursor:pointer; }
+
     .modal {
-      display:none;
-      position:fixed;
-      top:0; left:0;
-      width:100%; height:100%;
-      background:rgba(0,0,0,0.5);
+      display:none; position:fixed; top:0; left:0;
+      width:100%; height:100%; background:rgba(0,0,0,0.5);
     }
     .modal-content {
-      background:#ffe4e1;
-      margin:10% auto;
-      padding:20px;
-      width:400px;
-      border-radius:12px;
+      background:#ffe4e1; margin:10% auto; padding:20px;
+      width:400px; border-radius:12px;
     }
-    .modal-content input {
-      width:100%;
-    }
+    .modal-content input { width:100%; }
   </style>
 </head>
 
@@ -78,10 +42,10 @@
 
 <!-- FILTERS -->
 <div id="searchDiv">
-  <input type="text" id="filterSong" placeholder="Name of Song">
-  <input type="text" id="filterArtist" placeholder="Artist">
-  <input type="text" id="filterGenre" placeholder="Genre">
-  <input type="text" id="filterLanguage" placeholder="Language">
+  <input id="filterSong" placeholder="Name of Song">
+  <input id="filterArtist" placeholder="Artist">
+  <input id="filterGenre" placeholder="Genre">
+  <input id="filterLanguage" placeholder="Language">
   <button id="searchBtn">Search</button>
   <button id="resetBtn">Reset</button>
 </div>
@@ -89,24 +53,24 @@
 <!-- LOGIN -->
 <div id="loginDiv">
   <h2>Admin Login</h2>
-  <input type="email" id="email" placeholder="Email"><br>
-  <input type="password" id="password" placeholder="Password"><br>
+  <input id="email" type="email" placeholder="Email"><br>
+  <input id="password" type="password" placeholder="Password"><br>
   <button id="loginBtn">Login</button>
   <p id="loginMsg" style="color:red;"></p>
 </div>
 
 <!-- ADD SONG -->
 <form id="musicForm" style="display:none;">
-  <input type="text" id="song_name" placeholder="Name of Song" required><br>
-  <input type="text" id="artist" placeholder="Artist"><br>
-  <input type="text" id="genre" placeholder="Genre"><br>
-  <input type="text" id="language" placeholder="Language"><br>
-  <input type="date" id="last_performed"><br>
+  <input id="song_name" placeholder="Name of Song" required><br>
+  <input id="artist" placeholder="Artist"><br>
+  <input id="genre" placeholder="Genre"><br>
+  <input id="language" placeholder="Language"><br>
+  <input id="last_performed" type="date"><br>
   <button type="submit">Add Song</button>
 </form>
 
 <h3>Song List</h3>
-<table id="musicTable">
+<table>
   <thead>
     <tr>
       <th>Name of Song</th>
@@ -116,39 +80,46 @@
       <th>Date Last Performed</th>
     </tr>
   </thead>
-  <tbody></tbody>
+  <tbody id="tableBody"></tbody>
 </table>
 
 <!-- EDIT MODAL -->
 <div id="editModal" class="modal">
   <div class="modal-content">
     <h3>Edit Song</h3>
-    <input type="text" id="editSongName" placeholder="Name of Song"><br>
-    <input type="text" id="editArtist" placeholder="Artist"><br>
-    <input type="text" id="editGenre" placeholder="Genre"><br>
-    <input type="text" id="editLanguage" placeholder="Language"><br>
-    <input type="date" id="editLastPerformed"><br><br>
+    <input id="editSongName"><br>
+    <input id="editArtist"><br>
+    <input id="editGenre"><br>
+    <input id="editLanguage"><br>
+    <input id="editDate" type="date"><br><br>
     <button id="saveEditBtn">Save</button>
     <button id="cancelEditBtn">Cancel</button>
   </div>
 </div>
 
 <script>
+/* ✅ ONLY ONE CLIENT (FIXED) */
 const SUPABASE_URL = "https://qkabaxdfqkpanwvagpdn.supabase.co";
 const SUPABASE_KEY = "YOUR_ANON_KEY";
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let user = null;
 let editId = null;
 
-// LOGIN
+/* LOGIN */
 loginBtn.onclick = async () => {
-  const { data, error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabaseClient.auth.signInWithPassword({
     email: email.value,
     password: password.value
   });
 
-  if(error){ loginMsg.textContent = error.message; return; }
+  console.log(data, error);
+
+  if(error){
+    loginMsg.textContent = error.message;
+    return;
+  }
 
   user = data.user;
   loginDiv.style.display = "none";
@@ -156,9 +127,9 @@ loginBtn.onclick = async () => {
   loadData();
 };
 
-// LOAD
+/* LOAD DATA */
 async function loadData(song="", artist="", genre="", language=""){
-  let query = supabase.from("Songs").select("*").order("song_name");
+  let query = supabaseClient.from("Songs").select("*").order("song_name");
 
   if(song) query = query.ilike("song_name", `%${song}%`);
   if(artist) query = query.ilike("artist", `%${artist}%`);
@@ -167,8 +138,7 @@ async function loadData(song="", artist="", genre="", language=""){
 
   const { data } = await query;
 
-  const tbody = document.querySelector("#musicTable tbody");
-  tbody.innerHTML = "";
+  tableBody.innerHTML = "";
 
   data.forEach(row=>{
     let tr = document.createElement("tr");
@@ -186,42 +156,44 @@ async function loadData(song="", artist="", genre="", language=""){
       <td>${row.language}</td>
       <td>${row.last_performed || ""}</td>
     `;
-    tbody.appendChild(tr);
+    tableBody.appendChild(tr);
   });
 }
 
-// ADD
+/* ADD */
 musicForm.onsubmit = async (e)=>{
   e.preventDefault();
-  await supabase.from("Songs").insert([{
+
+  await supabaseClient.from("Songs").insert([{
     song_name: song_name.value,
     artist: artist.value,
     genre: genre.value,
     language: language.value,
     last_performed: last_performed.value
   }]);
+
   musicForm.reset();
   loadData();
 };
 
-// EDIT
+/* EDIT */
 function openEdit(row){
   editId = row.id;
   editSongName.value = row.song_name;
   editArtist.value = row.artist;
   editGenre.value = row.genre;
   editLanguage.value = row.language;
-  editLastPerformed.value = row.last_performed || "";
+  editDate.value = row.last_performed || "";
   editModal.style.display = "block";
 }
 
 saveEditBtn.onclick = async ()=>{
-  await supabase.from("Songs").update({
+  await supabaseClient.from("Songs").update({
     song_name: editSongName.value,
     artist: editArtist.value,
     genre: editGenre.value,
     language: editLanguage.value,
-    last_performed: editLastPerformed.value
+    last_performed: editDate.value
   }).eq("id", editId);
 
   editModal.style.display = "none";
@@ -230,14 +202,14 @@ saveEditBtn.onclick = async ()=>{
 
 cancelEditBtn.onclick = ()=> editModal.style.display="none";
 
-// DELETE
+/* DELETE */
 async function deleteSong(id){
   if(!confirm("Delete this song?")) return;
-  await supabase.from("Songs").delete().eq("id", id);
+  await supabaseClient.from("Songs").delete().eq("id", id);
   loadData();
 }
 
-// FILTERS
+/* FILTERS */
 searchBtn.onclick = ()=> loadData(
   filterSong.value,
   filterArtist.value,
@@ -253,6 +225,7 @@ resetBtn.onclick = ()=>{
   loadData();
 };
 
+/* INIT */
 loadData();
 </script>
 
